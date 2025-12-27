@@ -1,13 +1,10 @@
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") {
-      return res.status(200).send("OK");
-    }
+    // Telegram wysyła POST. GET/INNE odpowiadamy OK.
+    if (req.method !== "POST") return res.status(200).send("OK");
 
-    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    if (!BOT_TOKEN) {
-      return res.status(500).send("Missing TELEGRAM_BOT_TOKEN");
-    }
+    const BOT_TOKEN = process.env.BOT_TOKEN;
+    if (!BOT_TOKEN) return res.status(200).send("Missing BOT_TOKEN");
 
     const update = req.body;
 
@@ -20,11 +17,12 @@ export default async function handler(req, res) {
       return r.json();
     };
 
-    const GAME_SHORT_NAME = "road2money";
+    // Twoje stałe
+    const GAME_SHORT_NAME = process.env.GAME_SHORT_NAME || "road2money";
     const GAME_URL = "https://richierich-road2money.vercel.app/";
 
-    // 1) /start -> wyślij grę (sendGame)
-    if (update.message && update.message.chat && update.message.text) {
+    // 1) /start lub /play -> wysyłamy kartę gry (sendGame)
+    if (update?.message?.chat?.id && typeof update?.message?.text === "string") {
       const chatId = update.message.chat.id;
       const text = update.message.text.trim();
 
@@ -36,26 +34,28 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2) Kliknięcie PLAY -> callback_query -> MUSISZ odpowiedzieć URL-em gry
-    if (update.callback_query && update.callback_query.id) {
+    // 2) Kliknięcie PLAY -> callback_query -> odpowiadamy URL-em gry
+    if (update?.callback_query?.id) {
       const cq = update.callback_query;
 
-      // Telegram wysyła game_short_name przy grach
+      // Jeśli to inna gra niż nasza, i tak odpowiadamy, żeby Telegram nie wisiał
       if (cq.game_short_name === GAME_SHORT_NAME) {
         await api("answerCallbackQuery", {
           callback_query_id: cq.id,
           url: GAME_URL,
+          cache_time: 0,
         });
       } else {
-        // żeby Telegram nie “wisiał”
         await api("answerCallbackQuery", {
           callback_query_id: cq.id,
+          cache_time: 0,
         });
       }
     }
 
     return res.status(200).json({ ok: true });
   } catch (e) {
-    return res.status(200).json({ ok: true }); // Telegram i tak musi dostać 200
+    // Telegram musi dostać 200, żeby nie retry'ował
+    return res.status(200).json({ ok: true });
   }
 }
